@@ -9,7 +9,7 @@ This guide walks you through setting up a virtual environment and installing req
 #### Windows
 ```bash
 python -m venv env
-.\env\Scripts\activate
+.\env\Scripts\Activate.ps1
 ```
 
 #### Linux/macOS
