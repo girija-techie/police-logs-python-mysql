@@ -21,11 +21,6 @@ def get_data(query):
 
     cursor.execute(query)
     rows = cursor.fetchall() # assign table data
-    
-    # cursor.description -> List
-    # [(), (), ...]
-    # (ID,s,d,f,f,g)
-    # (stop_date,s,d,f,f,g)
     column_names = [i[0] for i in cursor.description] # assign column names -> List
 
     df = pd.DataFrame(rows, columns=column_names)
@@ -81,7 +76,7 @@ queries_dict = {
     "Which country has the most stops with search conducted?": "SELECT country_name, COUNT(*) as stop_count FROM traffic_records WHERE search_conducted = 1 GROUP BY country_name ORDER BY stop_count DESC LIMIT 1",
     "Yearly Breakdown of Stops and Arrests by Country (Using Subquery and Window Functions)":"select country_name, stop_year, total_stops, arrest_count from (SELECT country_name, YEAR(stop_date) AS stop_year, COUNT(*) over (PARTITION by country_name) as total_stops, COUNT(case when is_arrested = 1 THEN 1 END) over (PARTITION BY country_name) AS arrest_count FROM traffic_records) as country_based_counts GROUP BY country_name, stop_year;",
     "Driver Violation Trends Based on Age and Race (Join with Subquery)":"SELECT * FROM ( SELECT CASE WHEN driver_age < 18 THEN 'Under 18' WHEN driver_age BETWEEN 18 AND 24 THEN '18-24' WHEN driver_age BETWEEN 25 AND 34 THEN '25-34' WHEN driver_age BETWEEN 35 AND 44 THEN '35-44' WHEN driver_age BETWEEN 45 AND 54 THEN '45-54' WHEN driver_age BETWEEN 55 AND 64 THEN '55-64' ELSE '65+' END AS age_group, driver_race, violation, COUNT(*) AS total_stops FROM traffic_records GROUP BY age_group, driver_race, violation ) AS v JOIN ( SELECT DISTINCT violation FROM traffic_records ) AS ref_violations ON v.violation = ref_violations.violation ORDER BY v.age_group, v.driver_race, v.total_stops DESC",
-    "Time Period Analysis of Stops (Joining with Date Functions), Number of Stops by Year,Month, Hour of the Day":"query17",
+    "Time Period Analysis of Stops (Joining with Date Functions), Number of Stops by Year,Month, Hour of the Day":"SELECT YEAR(stop_date) AS stop_year, MONTH(stop_date) AS stop_month, HOUR(stop_time) AS stop_hour, COUNT(*) AS stop_count, ROW_NUMBER() OVER (PARTITION BY YEAR(stop_date) ORDER BY MONTH(stop_date), HOUR(stop_time)) AS monthly_rank FROM traffic_records WHERE stop_date IS NOT NULL AND stop_time IS NOT NULL GROUP BY YEAR(stop_date), MONTH(stop_date), HOUR(stop_time) ORDER BY stop_year, stop_month, stop_hour",
     "Violations with High Search and Arrest Rates (Window Function)":"SELECT violation, total_arrest / COUNT(*) AS arrest_rate, total_search / COUNT(*) AS search_rate FROM (SELECT violation, COUNT(CASE WHEN is_arrested = 1 THEN 1 END) OVER (PARTITION BY violation) AS total_arrest, COUNT(CASE WHEN search_conducted = 1 THEN 1 END) OVER (PARTITION BY violation) AS total_search FROM traffic_records) AS violation_details GROUP BY violation ORDER BY arrest_rate, search_rate",
     "Driver Demographics by Country (Age, Gender, and Race)":"SELECT country_name, driver_gender, driver_race, CASE WHEN driver_age < 18 THEN 'under 18' WHEN driver_age BETWEEN 18 and 25 THEN '18-25' WHEN driver_age BETWEEN 26 and 35 THEN '26-35' WHEN driver_age BETWEEN 36 AND 45 THEN '36-45' WHEN driver_age BETWEEN 46 and 55 THEN '45-55' WHEN driver_age BETWEEN 56 and 65 THEN '56-65' ELSE '65+' END as age_group, COUNT(*) as violation_count FROM traffic_records GROUP BY country_name, driver_gender, driver_age, age_group ORDER BY country_name, driver_gender, driver_age, age_group",
     "Top 5 Violations with Highest Arrest Rates": "SELECT violation, COUNT(CASE WHEN is_arrested = 1 THEN 1 END) / COUNT(*) * 100 as arrest_rate FROM traffic_records GROUP BY violation ORDER BY arrest_rate DESC LIMIT 5"
