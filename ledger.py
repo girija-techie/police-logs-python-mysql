@@ -116,7 +116,7 @@ with st.form("my_form", clear_on_submit=False):
     # Time input
     selected_time = st.time_input(
         "Select a time",
-        value=time(12, 0), # default is 12:00 PM
+        value=time(0, 0), # default is 12:00 AM
         step=60 
     )
 
