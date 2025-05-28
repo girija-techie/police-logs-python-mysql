@@ -199,11 +199,6 @@ with st.form("my_form", clear_on_submit=False):
 
         final_query = prediction_query + " and ".join(conditions) + " LIMIT 1"
 
-        st.write(prediction_query)
-        st.write(" and ".join(conditions))
-        st.write(" LIMIT 1")
-        st.write(final_query)
-
         query_df = get_data(final_query)
         if len(query_df):
             data = query_df.iloc[0]
