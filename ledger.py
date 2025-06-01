@@ -3,6 +3,7 @@ import pandas as pd
 import mysql.connector
 from datetime import time, date
 import re # regular expression
+import plotly.graph_objects as go
 
 mydb = mysql.connector.connect(
     host = "localhost",
@@ -12,53 +13,107 @@ mydb = mysql.connector.connect(
 )
 
 cursor = mydb.cursor()
-
 cursor.execute("USE digital_ledger;")
-
 
 def get_data(query):
 
     cursor.execute(query)
     rows = cursor.fetchall() # assign table data
     column_names = [i[0] for i in cursor.description] # assign column names -> List
-
     df = pd.DataFrame(rows, columns=column_names)
  
     return df # output is dataframe
 
-st.title("Digital Ledger for Police Post Logs")
-st.header("🚦 Traffic Records")
+def Project_Overview():
+    st.header(" Digital Ledger For Police Post Logs")
+    st.text("SecureCheck is a digital logging platform designed to replace traditional handwritten police post logbooks. It allows officers to record incidents, vehicle stops, violations, and arrests digitally, securely and efficiently.")
+    st.image("Digital_police_postlogs.webp", use_container_width=True)
+    st.markdown("### 🔐 Key Features")
+    st.markdown("""
+    - 🧾 Digital entry of traffic stops, violations, and arrests  
+    - 👮 Role-based access for Officers 
+    - 📊 Real-time search, filter, and log history  
+    - 📂 Export logs for audit/reporting    
+    """)
 
-tableRecords = get_data("SELECT * FROM traffic_records;")
-st.dataframe(tableRecords)
+def Traffic_Records():
+    st.header("🚦 Traffic Records")
+    tableRecords = get_data("SELECT * FROM traffic_records;")
+    st.dataframe(tableRecords)
 
-st.header("📊 Traffic Violation Insights at a Glance")
- 
-age_df = get_data("SELECT DISTINCT(driver_age) FROM traffic_records ORDER BY driver_age;")
+def Insights():
+    st.header("📊 Traffic Violation Insights at a Glance")
+    age_df = get_data("SELECT DISTINCT(driver_age) FROM traffic_records ORDER BY driver_age;")
+    # Create two columns
+    c1, c2 = st.columns(2)
 
-# Create two columns
-c1, c2 = st.columns(2)
+    with c1:
+        sa = st.selectbox('Driver Age', list(age_df["driver_age"]), index=0)
 
-with c1:
-    sa = st.selectbox('Driver Age',list(age_df["driver_age"]),index=0)
+    with c2:
+        # Mapping for display and internal value
+        gender_options = {
+            "Male": "M",
+            "Female": "F"
+        }
+        sg_label = st.selectbox('Driver Gender', list(gender_options.keys()),index=0)
+        sg = gender_options[sg_label]
 
-with c2:
-    # Mapping for display and internal value
-    gender_options = {
-        "Male": "M",
-        "Female": "F"
-    }
-    sg_label = st.selectbox('Driver Gender', list(gender_options.keys()),index=0)
-    sg = gender_options[sg_label]
+    # create barchart
 
-# create bar chart
-barChart = get_data(f"SELECT violation, COUNT(violation) FROM `traffic_records` WHERE driver_age = {sa} and driver_gender = '{sg}' GROUP BY violation;")
-barChart = barChart.set_index('violation')
-st.bar_chart(barChart)
+    barChart = get_data(f"SELECT violation, COUNT(violation) FROM `traffic_records` WHERE driver_age = {sa} and driver_gender = '{sg}' GROUP BY violation;")
+    barChart = barChart.set_index('violation')
+    st.bar_chart(barChart)
 
-st.header("🧮 Query & Explore")
+    # create donut chart split two columns 
 
-queries_dict = {
+    inner_donut = get_data("SELECT country_name, COUNT(*) as violation_count FROM traffic_records GROUP BY country_name ORDER BY country_name")
+
+    outer_donut = get_data("SELECT country_name, violation, COUNT(*) as violation_count FROM traffic_records GROUP BY country_name, violation ORDER BY country_name, violation_count")
+
+    outer_donut['country_violation'] = outer_donut['country_name'] +" - "+ outer_donut['violation']
+
+    fig = go.Figure()
+
+    # Inner Donut (Countries)
+    fig.add_trace(go.Pie(
+        labels=list(inner_donut["country_name"]),
+        values=list(inner_donut["violation_count"]),
+        hole=0.5,
+        direction='clockwise',
+        sort=False,
+        textinfo='label+percent',
+        domain={'x': [0.25, 0.75], 'y': [0.25, 0.75]},
+        marker=dict(line=dict(color='white', width=1)),
+        showlegend=True
+    ))
+
+    # Outer Donut (Crimes per Country)
+    fig.add_trace(go.Pie(
+        labels=list(outer_donut["country_violation"]),
+        values=list(outer_donut["violation_count"]),
+        hole=0.5,  # Creates the second outer ring
+        direction='clockwise',
+        sort=False,
+        textinfo='label+percent',
+        domain={'x': [0, 1], 'y': [0, 1]},
+        marker=dict(line=dict(color='white', width=1)),
+        showlegend=False
+    ))
+    
+    st.header("🎯 Violance Volume Per Country ")
+    fig.update_layout(
+        height=600,
+        margin=dict(t=80, b=40, l=20, r=20
+    ))
+
+    # Show in Streamlit
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def Queries():
+    st.header("🧮 Query & Explore")
+    queries_dict = {
     "What are the top 10 vehicles involved in drug-related stops?": "SELECT * FROM traffic_records LIMIT 10",
     "Which vehicles were most frequently searched?": "SELECT vehicle_number, COUNT(*) AS search_count FROM traffic_records WHERE search_conducted = 1 GROUP BY vehicle_number ORDER BY search_count DESC LIMIT 10",
     "Which driver age group had the highest arrest rate?": "SELECT driver_age, COUNT(*) AS arrest_count from traffic_records WHERE is_arrested = 1 GROUP BY driver_age ORDER BY arrest_count DESC LIMIT 10",
@@ -81,128 +136,136 @@ queries_dict = {
     "Top 5 Violations with Highest Arrest Rates": "SELECT violation, COUNT(CASE WHEN is_arrested = 1 THEN 1 END) / COUNT(*) * 100 as arrest_rate FROM traffic_records GROUP BY violation ORDER BY arrest_rate DESC LIMIT 5"
     }
 
-question = st.selectbox('Select Query', list(queries_dict.keys()),index=0)
+    question = st.selectbox('Select Query', list(queries_dict.keys()),index=0)
 
-query = queries_dict[question]
+    query = queries_dict[question]
 
-qs_df = get_data(query)
+    qs_df = get_data(query)
 
-st.dataframe(qs_df)
+    st.dataframe(qs_df)
 
+ 
+def Prediction():
+    st.header("🧠 Predict Outcome and Violation")
 
-st.header("🧠 Predict Outcome and Violation")
+    gender_options = {
+            "Male": "M",
+            "Female": "F"
+        }
 
-def convert_duration(text):
-    if "Min" in text:
-        if "+" in text:
-            # Handle "60+ Min"
-            number = re.findall(r"\d+", text)
-            return f"more than {number[0]} minutes"
-        elif "-" in text:
-            # Handle "0-15 Min"
-            return re.sub(r"(\d+)-(\d+)\s*Min", r"\1 to \2 minutes", text)
-    return text  # Return as-is if it doesn't match
+    def convert_duration(text):
+        if "Min" in text:
+            if "+" in text:
+                # Handle "60+ Min"
+                number = re.findall(r"\d+", text)
+                return f"more than {number[0]} minutes"
+            elif "-" in text:
+                # Handle "0-15 Min"
+                return re.sub(r"(\d+)-(\d+)\s*Min", r"\1 to \2 minutes", text)
+        return text  # Return as-is if it doesn't match
 
-with st.form("my_form", clear_on_submit=False):
+    with st.form("my_form", clear_on_submit=False):
 
-    # Date input
-    selected_date = st.date_input(
-        "Select a date",
-        value=date.today(),  # default value
-        min_value=date(2019, 12, 31),
-        max_value=date(2030, 12, 31)
-    )
+        # Date input
+        selected_date = st.date_input(
+            "Select a date",
+            value=date.today(),  # default value
+            min_value=date(2019, 12, 31),
+            max_value=date(2030, 12, 31)
+        )
 
-    # Time input
-    selected_time = st.time_input(
-        "Select a time",
-        value=time(0, 0), # default is 12:00 AM
-        step=60 
-    )
+        # Time input
+        selected_time = st.time_input(
+            "Select a time",
+            value=time(0, 0), # default is 12:00 AM
+            step=60 
+        )
 
-    # Countries list from DB
-    country_df = get_data("SELECT DISTINCT(country_name) FROM traffic_records ORDER BY country_name")
-    selected_country = st.selectbox('Choose Country Name',["-- Select an option --"] + list(country_df["country_name"]),index=0)
+        # Countries list from DB
+        country_df = get_data("SELECT DISTINCT(country_name) FROM traffic_records ORDER BY country_name")
+        selected_country = st.selectbox('Choose Country Name',["-- Select an option --"] + list(country_df["country_name"]),index=0)
 
-    # Genders list
-    gender_name = st.selectbox('Choose Driver Gender', ["-- Select an option --"] + list(gender_options.keys()),index=0)
-    selected_gender = ''
-    if(gender_name != "-- Select an option --"):
-        selected_gender = gender_options[gender_name]
+        # Genders list
+        gender_name = st.selectbox('Choose Driver Gender', ["-- Select an option --"] + list(gender_options.keys()),index=0)
+        selected_gender = ''
+        if(gender_name != "-- Select an option --"):
+            selected_gender = gender_options[gender_name]
 
-    # Age list from DB
-    selected_age = st.selectbox('Choose Driver Age',["-- Select an option --"] + list(age_df["driver_age"]),index=0)
+        # Age list from DB
+        age_df = get_data("SELECT DISTINCT(driver_age) FROM traffic_records ORDER BY driver_age;")
+        selected_age = st.selectbox('Choose Driver Age',["-- Select an option --"] + list(age_df["driver_age"]),index=0)
 
-    # Race list from DB
-    race_df = get_data("SELECT DISTINCT(driver_race) FROM traffic_records ORDER BY driver_race")
-    selected_race = st.selectbox('Choose Driver Race',["-- Select an option --"] + list(race_df["driver_race"]),index=0)
+        # Race list from DB
+        race_df = get_data("SELECT DISTINCT(driver_race) FROM traffic_records ORDER BY driver_race")
+        selected_race = st.selectbox('Choose Driver Race',["-- Select an option --"] + list(race_df["driver_race"]),index=0)
 
-    search_conduct_dict = {
-        'Yes': 1, 
-        'No': 0
-    }
-    search_conducted = st.selectbox('Was a Search Conducted',["-- Select an option --"] + list(search_conduct_dict.keys()),index=0)
-    if(search_conducted != "-- Select an option --"):
-        is_search_conducted = search_conduct_dict[search_conducted]
+        search_conduct_dict = {
+            'Yes': 1, 
+            'No': 0
+        }
+        search_conducted = st.selectbox('Was a Search Conducted',["-- Select an option --"] + list(search_conduct_dict.keys()),index=0)
+        if(search_conducted != "-- Select an option --"):
+            is_search_conducted = search_conduct_dict[search_conducted]
 
-    search_type_df = get_data("SELECT DISTINCT(search_type) FROM traffic_records ORDER BY search_type")
-    selected_search_type = st.selectbox('Choose Search Type',["-- Select an option --"] + list(search_type_df["search_type"]))
+        search_type_df = get_data("SELECT DISTINCT(search_type) FROM traffic_records ORDER BY search_type")
+        selected_search_type = st.selectbox('Choose Search Type',["-- Select an option --"] + list(search_type_df["search_type"]))
 
-    drug_related = st.selectbox('Was it Drug Related',["-- Select an option --"] + list(search_conduct_dict.keys()),index=0)
-    if(drug_related != "-- Select an option --"):
-        is_drug_related = search_conduct_dict[drug_related]
+        drug_related = st.selectbox('Was it Drug Related',["-- Select an option --"] + list(search_conduct_dict.keys()),index=0)
+        if(drug_related != "-- Select an option --"):
+            is_drug_related = search_conduct_dict[drug_related]
 
-    stop_duration_df = get_data("SELECT DISTINCT(stop_duration) FROM traffic_records ORDER BY stop_duration")
-    selected_stop_duration = st.selectbox('Choose Search Type',["-- Select an option --"] + list(stop_duration_df["stop_duration"]))
+        stop_duration_df = get_data("SELECT DISTINCT(stop_duration) FROM traffic_records ORDER BY stop_duration")
+        selected_stop_duration = st.selectbox('Choose Search Type',["-- Select an option --"] + list(stop_duration_df["stop_duration"]))
 
-    entered_vehicle_number = st.text_input("Enter Vehicle Number", key="my_input")
+        entered_vehicle_number = st.text_input("Enter Vehicle Number", key="my_input")
 
-    submitted = st.form_submit_button("Predict Stop Outcome & Violation")
+        submitted = st.form_submit_button("Predict Stop Outcome & Violation")
 
-    # Prediction queries
-    if submitted:
-        prediction_query = "SELECT *, DATE_FORMAT(stop_time, '%h:%i %p') AS readable_time FROM traffic_records WHERE "
-        conditions = []
-        if(selected_date):
-            conditions.append(f"stop_date = '{selected_date}'")
-        
-        if(selected_time):
-            conditions.append(f"stop_time = '{selected_time}'")
-        
-        if(selected_country != '-- Select an option --'):
-            conditions.append(f"country_name = '{selected_country}'")
-        
-        if(selected_gender != '-- Select an option --' and selected_gender != ''):
-            conditions.append(f"driver_gender = '{selected_gender}'")
+        # Prediction queries
+        if submitted:
+            prediction_query = "SELECT *, DATE_FORMAT(stop_time, '%h:%i %p') AS readable_time FROM traffic_records WHERE "
+            conditions = []
+            if(selected_date):
+                conditions.append(f"stop_date = '{selected_date}'")
             
-        if(selected_age != '-- Select an option --'):
-            conditions.append(f"driver_age = {selected_age}")
+            if(selected_time):
+                conditions.append(f"stop_time = '{selected_time}'")
+            
+            if(selected_country != '-- Select an option --'):
+                conditions.append(f"country_name = '{selected_country}'")
+            
+            if(selected_gender != '-- Select an option --' and selected_gender != ''):
+                conditions.append(f"driver_gender = '{selected_gender}'")
+                
+            if(selected_age != '-- Select an option --'):
+                conditions.append(f"driver_age = {selected_age}")
 
-        if(selected_race != '-- Select an option --'):
-            conditions.append(f"driver_race = '{selected_race}'")
-        
-        if(selected_search_type != '-- Select an option --'):
-            conditions.append(f"search_type = '{selected_search_type}'")
+            if(selected_race != '-- Select an option --'):
+                conditions.append(f"driver_race = '{selected_race}'")
+            
+            if(selected_search_type != '-- Select an option --'):
+                conditions.append(f"search_type = '{selected_search_type}'")
 
-        if(search_conducted != '-- Select an option --'):
-            conditions.append(f"search_conducted = {is_search_conducted}")
+            if(search_conducted != '-- Select an option --'):
+                conditions.append(f"search_conducted = {is_search_conducted}")
 
-        if(drug_related != '-- Select an option --'):
-            conditions.append(f"drugs_related_stop = {is_drug_related}")
+            if(drug_related != '-- Select an option --'):
+                conditions.append(f"drugs_related_stop = {is_drug_related}")
 
-        if(selected_stop_duration != '-- Select an option --'):
-            conditions.append(f"stop_duration = '{selected_stop_duration}'")
+            if(selected_stop_duration != '-- Select an option --'):
+                conditions.append(f"stop_duration = '{selected_stop_duration}'")
 
-        if(entered_vehicle_number != ''):
-            conditions.append(f"vehicle_number = '{entered_vehicle_number.upper()}'")
+            if(entered_vehicle_number != ''):
+                conditions.append(f"vehicle_number = '{entered_vehicle_number.upper()}'")
 
-        final_query = prediction_query + " and ".join(conditions) + " LIMIT 1"
+            final_query = prediction_query + " and ".join(conditions) + " LIMIT 1"
+          
+            query_df = get_data(final_query)
+            if len(query_df):
+                data = query_df.iloc[0]
+                st.write(f"A **{data['driver_age']}-year-old {'male' if data['driver_gender'] == 'M' else 'female'} driver** was stopped at **{data['readable_time']}** for **{data['violation'].lower() if data['violation'] != 'Other' else 'unspecified'}** reason. {'He' if data['driver_gender'] == 'M' else 'She'} was **{data['stop_outcome'].lower()}** {'with search conducted' if data['search_conducted'] == 1 else 'without a search being conducted'}. The stop lasted between **{convert_duration(data['stop_duration'])}** and the case was **{'related to drugs(💊)' if data['drugs_related_stop'] == 1 else 'not related to drugs'}**.")
+            else:
+                st.write("No Results Found")
 
-        query_df = get_data(final_query)
-        if len(query_df):
-            data = query_df.iloc[0]
-            st.write(f"A **{data['driver_age']}-year-old {'male' if data['driver_gender'] == 'M' else 'female'} driver** was stopped at **{data['readable_time']}** for **{data['violation'].lower() if data['violation'] != 'Other' else 'unspecified'}** reason. {'He' if data['driver_gender'] == 'M' else 'She'} was **{data['stop_outcome'].lower()}** {'with search conducted' if data['search_conducted'] == 1 else 'without a search being conducted'}. The stop lasted between **{convert_duration(data['stop_duration'])}** and the case was **{'related to drugs(💊)' if data['drugs_related_stop'] == 1 else 'not related to drugs'}**.")
-        else:
-            st.write("No Results Found")
-
-
+pg = st.navigation([Project_Overview, Traffic_Records, Insights, Queries, Prediction])
+pg.run()
