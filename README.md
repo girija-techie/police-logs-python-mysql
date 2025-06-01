@@ -2,8 +2,9 @@
 A Streamlit-based interactive dashboard that analyzes and explores traffic stop records stored in a MySQL database. This tool provides insightful visualizations, deep query-based insights, and a smart prediction system for evaluating traffic stop outcomes.
 
 ## 📌 Features
+- 🗺️ Sidebar Navigation for seamless switch to different pages.
 - ✅ Interactive Data Exploration: Filter by age, gender, time, and more
-- 📊 Visual Insights: Real-time bar charts for traffic violations
+- 📊 Visual Insights: Real-time bar chart and donut chart for traffic violations
 - 🔍 Dynamic SQL Queries: Choose from pre-built analytical questions
 - 🤖 Prediction Interface: Get stop outcomes based on custom inputs
 - 🧠 Window Functions & Subqueries: Advanced SQL analytics
@@ -117,5 +118,4 @@ pip freeze > requirements.txt
 ```
 ## 🤝 Contributions
 Pull requests are welcome! For major changes, please open an issue first.
-## 📄 License
-This project is open-source and available under the MIT License.
+
